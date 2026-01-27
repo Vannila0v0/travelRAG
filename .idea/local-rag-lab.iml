@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<module type="PYTHON_MODULE" version="4">
+  <component name="NewModuleRootManager">
+    <content url="file://$MODULE_DIR$">
+      <excludeFolder url="file://$MODULE_DIR$/cache/.locks" />
+      <excludeFolder url="file://$MODULE_DIR$/cache/models--BAAI--bge-reranker-base/blobs" />
+      <excludeFolder url="file://$MODULE_DIR$/cache/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2/blobs" />
+      <excludeFolder url="file://$MODULE_DIR$/model_cache/.locks" />
+    </content>
+    <orderEntry type="jdk" jdkName="Python 3.11 (4)" jdkType="Python SDK" />
+    <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+</module>
