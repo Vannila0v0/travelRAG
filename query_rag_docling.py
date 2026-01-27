@@ -14,7 +14,7 @@ from etl_parser import parse_pdf_to_markdown, chunk_markdown
 # 1. 深度文档解析 (Deep Document Understanding)
 # ======================
 # 假设我们要处理 data 目录下的 PDF
-data_path = "data/桂林旅游产品常用知识(1).docx"
+data_path = "../data/桂林旅游产品常用知识(1).docx"
 
 # 判断是读缓存还是重新解析（真实项目中通常会把解析结果存数据库）
 if os.path.exists(data_path):
