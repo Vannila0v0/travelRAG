@@ -1,0 +1,12 @@
+{"id":"q001","question":"两江四湖成人票多少钱？","expected_route":"hybrid","expected_answer_keywords":["210元","185元","夜游两江四湖","夜游四湖"],"expected_sources":["两江四湖.pdf","桂林旅游产品常用知识"],"tags":["票价","local_graph","hybrid"]}
+{"id":"q002","question":"两江四湖儿童票有什么规则？","expected_route":"hybrid","expected_answer_keywords":["儿童票","身高","1.2米","1.5米"],"expected_sources":["两江四湖.pdf","桂林旅游产品常用知识"],"tags":["儿童票","规则政策","local_graph"]}
+{"id":"q003","question":"两江四湖船票退票规则是什么？","expected_route":"hybrid","expected_answer_keywords":["退票","开航","手续费","不可退"],"expected_sources":["两江四湖.pdf","桂林旅游产品常用知识"],"tags":["退改签","规则政策","local_graph"]}
+{"id":"q004","question":"龙胜温泉有什么特色？","expected_route":"vector","expected_answer_keywords":["地下1200米","温泉水","可饮用","人间瑶池"],"expected_sources":["tourism_dpo.md","附件：贺州温泉旅游有限责任公司常用知识问答和相关资料"],"tags":["景点介绍","vector"]}
+{"id":"q005","question":"龙胜温泉门票有哪些优惠政策？","expected_route":"hybrid","expected_answer_keywords":["学生","老人","军人","9折"],"expected_sources":["tourism_dpo.md","附件：贺州温泉旅游有限责任公司常用知识问答和相关资料"],"tags":["优惠政策","local_graph","hybrid"]}
+{"id":"q006","question":"从龙胜县城汽车总站怎么去温泉景区大门口？","expected_route":"hybrid","expected_answer_keywords":["龙胜县城汽车总站","江底乡","公交车","温泉景区大门口"],"expected_sources":["tourism_dpo.md","附件：贺州温泉旅游有限责任公司常用知识问答和相关资料"],"tags":["交通路线","local_graph","hybrid"]}
+{"id":"q007","question":"银子岩溶洞有哪些特色景点？","expected_route":"hybrid","expected_answer_keywords":["独柱擎天","混元珍珠伞","佛祖论经","瑶池仙境"],"expected_sources":["tourism_dpo.md","桂林旅游产品常用知识"],"tags":["景点介绍","设施景观","local_graph"]}
+{"id":"q008","question":"漓江精华游船儿童免票和半价票规则是什么？","expected_route":"hybrid","expected_answer_keywords":["6周岁","1.2米","儿童零元票","半价票"],"expected_sources":["桂林旅游产品常用知识","tourism_dpo.md"],"tags":["儿童票","漓江","规则政策"]}
+{"id":"q009","question":"桂林市区一日游可以怎么玩？","expected_route":"global","expected_answer_keywords":["象山","芦笛岩","两江四湖","市区"],"expected_sources":["桂林市区旅游与水域管理社区","两江四湖景区夜游与票务体系"],"tags":["规划","global_graph","一日游"]}
+{"id":"q010","question":"桂林有哪些适合夜游的项目？","expected_route":"global","expected_answer_keywords":["两江四湖","夜游","游船","桂林千古情"],"expected_sources":["两江四湖景区夜游与票务体系","桂林千古情剧场票务与设施体系"],"tags":["夜游","global_graph","推荐"]}
+{"id":"q011","question":"遇龙河竹筏乘坐有什么规则？","expected_route":"hybrid","expected_answer_keywords":["遇龙河","竹筏","乘坐","规则"],"expected_sources":["tourism_dpo.md","桂林旅游产品常用知识"],"tags":["规则政策","遇龙河","local_graph"]}
+{"id":"q012","question":"帮我规划一天桂林市区游玩路线，包含交通和票价","expected_route":"agent","expected_answer_keywords":["路线","交通","票价","两江四湖"],"expected_sources":["桂林市区旅游与水域管理社区","两江四湖.pdf","桂林旅游产品常用知识"],"tags":["多智能体","规划","复杂任务"]}

@@ -1,0 +1,192 @@
+{
+  "version": "task-template-v1",
+  "templates": [
+    {
+      "name": "yangshuo_day_plan",
+      "description": "阳朔一日游规划，覆盖遇龙河、西街、交通方式和门票预算。",
+      "match": {
+        "all": [
+          {
+            "any": ["阳朔"]
+          },
+          {
+            "any": ["遇龙河", "西街"]
+          },
+          {
+            "any": ["一天", "一日游", "路线", "规划", "行程", "安排"]
+          },
+          {
+            "any": ["交通", "门票", "票价", "预算", "价格"]
+          }
+        ]
+      },
+      "execution_mode": "parallel",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "global_search",
+          "description": "获取阳朔一日游整体路线框架，覆盖遇龙河、西街、阳朔县城交通节点和典型游玩顺序。",
+          "priority": 1,
+          "depends_on": [],
+          "entities": ["阳朔", "遇龙河", "西街"]
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "local_search",
+          "description": "查询遇龙河竹筏、码头、乘坐规则、票价和建议游玩时长。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["遇龙河", "遇龙河竹筏"]
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "local_search",
+          "description": "查询阳朔西街的游玩特点、适合时段、餐饮消费和晚间活动信息。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": ["阳朔西街", "西街"]
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "local_search",
+          "description": "查询阳朔县城、遇龙河、西街之间的交通方式、耗时和预算信息。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["阳朔交通", "遇龙河交通", "阳朔至桂林返程交通节点"]
+        },
+        {
+          "task_id": "task_005",
+          "task_type": "reflection",
+          "description": "综合遇龙河、西街、交通和预算信息，生成时间顺畅、预算清晰的一日游路线。",
+          "priority": 3,
+          "depends_on": ["task_002", "task_003", "task_004"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "guilin_night_tour_plan",
+      "description": "桂林夜游规划，覆盖两江四湖、桂林千古情、时间、票价和夜间交通。",
+      "match": {
+        "all": [
+          {
+            "any": ["桂林"]
+          },
+          {
+            "any": ["晚上", "夜游", "夜间"]
+          },
+          {
+            "any": ["两江四湖", "桂林千古情", "千古情"]
+          },
+          {
+            "any": ["时间", "票价", "门票", "交通", "比较", "路线", "安排"]
+          }
+        ]
+      },
+      "execution_mode": "parallel",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "global_search",
+          "description": "获取桂林夜游整体方案，比较两江四湖和桂林千古情的夜间游玩定位、时间衔接和路线可行性。",
+          "priority": 1,
+          "depends_on": [],
+          "entities": ["桂林夜游", "两江四湖", "桂林千古情"]
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "local_search",
+          "description": "查询两江四湖夜游的票价、游船时间、码头位置和游玩注意事项。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["两江四湖", "夜游两江四湖"]
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "local_search",
+          "description": "查询桂林千古情的演出时间、票价、地址和适合夜间游玩的注意事项。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["桂林千古情"]
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "local_search",
+          "description": "查询两江四湖、桂林千古情和桂林市区交通节点之间的夜间交通方式、耗时和打车可行性。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": ["桂林夜间交通", "两江四湖码头", "桂林千古情交通"]
+        },
+        {
+          "task_id": "task_005",
+          "task_type": "reflection",
+          "description": "综合两江四湖、桂林千古情、时间、票价和交通信息，比较路线顺序并输出夜游建议。",
+          "priority": 3,
+          "depends_on": ["task_002", "task_003", "task_004"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "guilin_city_day_plan",
+      "description": "桂林市区一日游规划，包含交通、票价和餐饮补充信息。",
+      "match": {
+        "all": [
+          {
+            "any": ["桂林市区", "桂林", "市区"]
+          },
+          {
+            "any": ["一天", "一日游"]
+          },
+          {
+            "any": ["交通", "票价", "门票", "价格", "预算"]
+          }
+        ],
+        "not": ["晚上", "夜游", "夜间", "桂林千古情", "千古情"]
+      },
+      "execution_mode": "parallel",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "global_search",
+          "description": "获取桂林市区核心景点和一日游路线框架，覆盖象鼻山、靖江王府、两江四湖、日月双塔等候选点。",
+          "priority": 1,
+          "depends_on": [],
+          "entities": ["桂林市区", "核心景点"]
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "local_search",
+          "description": "查询象鼻山、靖江王府、两江四湖、日月双塔等核心景点的门票价格、开放时间和建议游玩时长。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["象鼻山", "靖江王府", "两江四湖", "日月双塔"]
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "local_search",
+          "description": "查询桂林市区核心景点之间的交通方式、两江四湖码头位置、步行或打车耗时。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["桂林市区交通", "两江四湖码头"]
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "local_search",
+          "description": "查询桂林市区餐饮补充信息，包括正阳步行街、东西巷、桂林米粉等候选地点和人均消费。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": ["正阳步行街", "东西巷", "桂林米粉"]
+        },
+        {
+          "task_id": "task_005",
+          "task_type": "reflection",
+          "description": "综合景点、交通、票价和餐饮信息，校验时间衔接、交通便利性和预算合理性，形成最终一日游路线。",
+          "priority": 3,
+          "depends_on": ["task_002", "task_003", "task_004"],
+          "entities": []
+        }
+      ]
+    }
+  ]
+}
