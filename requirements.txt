@@ -17,6 +17,7 @@ numpy
 openpyxl
 pandas
 pydantic
+pytest
 python-dotenv
 python-louvain
 rank-bm25

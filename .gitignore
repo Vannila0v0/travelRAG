@@ -21,3 +21,8 @@ temp/
 *.tmp
 *.rar
 .DS_Store
+_handbook_/
+
+# Personal notes and interview drafts
+/项目改进.md
+/面试问答_*.md

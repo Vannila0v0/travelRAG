@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -22,7 +23,7 @@ class TaskTemplateMatcher:
         for template in self._templates:
             if self._matches_rule(query, template.get("match", {})):
                 try:
-                    return self._build_task_graph(template)
+                    return self._build_task_graph(template, query=query)
                 except Exception as exc:
                     _LOGGER.warning(
                         "Matched task template %s but failed to build graph: %s",
@@ -62,13 +63,13 @@ class TaskTemplateMatcher:
             return []
         return [template for template in templates if isinstance(template, dict)]
 
-    def _build_task_graph(self, template: dict[str, Any]) -> TaskGraph:
+    def _build_task_graph(self, template: dict[str, Any], query: str = "") -> TaskGraph:
         nodes = []
         for raw_node in template.get("nodes", []):
             if not isinstance(raw_node, dict):
                 continue
 
-            node_data = dict(raw_node)
+            node_data = self._render_value(dict(raw_node), query)
             node_data.setdefault("depends_on", [])
             node_data.setdefault("entities", [])
             node_data.setdefault("parameters", {})
@@ -82,6 +83,15 @@ class TaskTemplateMatcher:
             nodes=nodes,
             execution_mode=template.get("execution_mode", "sequential"),
         )
+
+    def _render_value(self, value: Any, query: str) -> Any:
+        if isinstance(value, str):
+            return value.replace("{query}", query)
+        if isinstance(value, list):
+            return [self._render_value(item, query) for item in value]
+        if isinstance(value, dict):
+            return {key: self._render_value(item, query) for key, item in value.items()}
+        return value
 
     def _matches_rule(self, query: str, rule: dict[str, Any]) -> bool:
         if not rule:
@@ -97,6 +107,10 @@ class TaskTemplateMatcher:
 
         not_keywords = rule.get("not", [])
         if not_keywords and self._has_any(query, not_keywords):
+            return False
+
+        regex = rule.get("regex")
+        if regex and not re.search(str(regex), query):
             return False
 
         return True

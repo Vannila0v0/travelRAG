@@ -1,4 +1,5 @@
 from pathlib import Path
+import re
 from threading import Lock
 
 from langchain_community.vectorstores import FAISS
@@ -41,8 +42,50 @@ class VectorQueryEngine:
                     )
         return self._vectorstore
 
+    def _lexical_boost(self, query: str, text: str) -> float:
+        query = query.lower()
+        text = text.lower()
+        boost = 0.0
+        terms: set[str] = set()
+        entity_terms: set[str] = set()
+
+        for segment in re.findall(r"[\u4e00-\u9fff]{2,}", query):
+            entity_terms.update(re.findall(r"[\u4e00-\u9fff]{1,8}(?:温泉|景区|四湖|千古情|银子岩|天门山)", segment))
+            max_len = min(6, len(segment))
+            for size in range(2, max_len + 1):
+                for start in range(0, len(segment) - size + 1):
+                    terms.add(segment[start:start + size])
+
+        for token in re.findall(r"[a-z0-9]{2,}", query):
+            terms.add(token)
+
+        for term in terms:
+            if term in text:
+                boost += min(len(term), 6) / 10
+
+        for entity in entity_terms:
+            if entity in text:
+                boost += 4.0
+                continue
+            suffix = next((ending for ending in ("温泉", "景区", "四湖", "千古情", "银子岩", "天门山") if entity.endswith(ending)), None)
+            if suffix and re.search(rf"[\u4e00-\u9fff]{{1,8}}{suffix}", text):
+                boost -= 2.0
+
+        return min(boost, 8.0)
+
+    def _rerank(self, query: str, results: list[tuple[object, float | None]]) -> list[tuple[object, float | None]]:
+        def adjusted(item):
+            doc, score = item
+            base_score = float(score) if score is not None else 0.0
+            text = getattr(doc, "page_content", "") or ""
+            return base_score - (self._lexical_boost(query, text) * 0.04)
+
+        return sorted(results, key=adjusted)
+
     def retrieve(self, query: str, k: int = 5) -> tuple[list, list[Source]]:
-        results = self.vectorstore.similarity_search_with_score(query, k=k)
+        candidate_k = max(k, min(k * 4, 30))
+        results = self.vectorstore.similarity_search_with_score(query, k=candidate_k)
+        results = self._rerank(query, results)[:k]
         docs = [doc for doc, _ in results]
         sources = [
             source_from_document(doc, score=float(score) if score is not None else None)

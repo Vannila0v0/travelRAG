@@ -58,6 +58,45 @@ NEO4J_URI=bolt://neo4j:7687
 NEO4J_URI=bolt://localhost:7687
 ```
 
+## 标准部署流程
+
+首次部署建议按以下顺序执行：
+
+```powershell
+# 1. 创建环境并安装依赖
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 2. 复制并填写配置
+Copy-Item .env.example .env
+
+# 3. 启动 Neo4j
+docker compose up -d neo4j neo4j-init
+
+# 4. 构建向量索引
+python .\manage.py build-index --source .\data
+
+# 5. 构建知识图谱和社区摘要
+python .\manage.py build-graph --source .\data --community --summary
+
+# 6. 检查运行依赖
+python .\manage.py check
+
+# 7. 启动 API 服务
+python .\manage.py serve --host 127.0.0.1 --port 8000
+```
+
+常用管理命令：
+
+```powershell
+python .\manage.py check --json
+python .\manage.py query "两江四湖成人票多少钱？" --route auto
+python .\manage.py smoke-web-tools --require-exa --query "桂林两江四湖今天是否开放？请查最新信息"
+python .\manage.py eval --route dataset --report-name local_eval
+python .\manage.py eval --dataset .\evaluation\datasets\agent_planning_qa.jsonl --route dataset --report-name agent_planning_eval
+```
+
 ## 当前 LLM 入口
 
 - `agent_system/integration/llm_factory.py`
@@ -174,9 +213,44 @@ python .\manage.py serve --host 127.0.0.1 --port 8000
 
 ```text
 GET  http://127.0.0.1:8000/health
+GET  http://127.0.0.1:8000/ready
 GET  http://127.0.0.1:8000/graph/stats
 POST http://127.0.0.1:8000/query
 POST http://127.0.0.1:8000/agent/query
+```
+
+`/health` 只表示 FastAPI 进程存活：
+
+```json
+{
+  "status": "ok"
+}
+```
+
+`/ready` 检查服务处理真实请求所需依赖：
+
+```json
+{
+  "status": "ok",
+  "checks": {
+    "neo4j": {
+      "status": "ok",
+      "detail": null
+    },
+    "faiss_index": {
+      "status": "ok",
+      "detail": null
+    },
+    "llm_config": {
+      "status": "ok",
+      "detail": null
+    },
+    "embedding_config": {
+      "status": "ok",
+      "detail": null
+    }
+  }
+}
 ```
 
 普通查询示例：
@@ -196,3 +270,104 @@ curl -X POST http://127.0.0.1:8000/agent/query `
 ```
 
 当前服务层只负责在线查询和状态检查；`build-graph` / `build-index` 仍保留为 CLI 离线任务，避免长任务、并发写库和 token 成本失控。
+
+### API 响应结构
+
+`POST /query` 和 `POST /agent/query` 使用统一请求结构：
+
+```json
+{
+  "question": "两江四湖成人票多少钱？",
+  "route": "auto",
+  "include_sources": true,
+  "include_source_text": false,
+  "include_metadata": true,
+  "allow_degraded": false,
+  "max_sources": 5
+}
+```
+
+成功响应：
+
+```json
+{
+  "success": true,
+  "route": "hybrid",
+  "answer": "...",
+  "sources": [
+    {
+      "doc_id": "...",
+      "chunk_id": "...",
+      "source_path": "...",
+      "file_name": "...",
+      "chunk_index": 0,
+      "page": null,
+      "section": null,
+      "text": null,
+      "score": 0.86
+    }
+  ],
+  "metadata": {
+    "latency_ms": 1234,
+    "requested_route": "auto",
+    "actual_route": "hybrid",
+    "source_count": 8,
+    "returned_source_count": 5,
+    "engine_metadata": {}
+  },
+  "error": null
+}
+```
+
+失败时返回结构化错误信息：
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "QUERY_FAILED",
+    "message": "Query execution failed",
+    "detail": "..."
+  }
+}
+```
+
+查询接口会在执行前做保守依赖检查。常见错误码：
+
+```text
+LLM_CONFIG_MISSING：DeepSeek API 配置缺失。
+FAISS_INDEX_MISSING：向量索引不存在，需要先运行 build-index。
+NEO4J_UNAVAILABLE：请求路由需要图谱，但 Neo4j 不可用。
+AGENT_EXECUTION_FAILED：Agent 执行阶段失败。
+QUERY_FAILED：普通查询执行失败。
+```
+
+当前版本选择显式失败，不做静默自动降级。比如请求 `global` / `hybrid` / `agent` 但 Neo4j 不可用时，接口会返回 `NEO4J_UNAVAILABLE`，而不是悄悄降级到 vector。
+
+如果调用方明确允许低风险降级，可以传入：
+
+```json
+{
+  "question": "两江四湖成人票多少钱？",
+  "route": "hybrid",
+  "allow_degraded": true
+}
+```
+
+当前只支持：
+
+```text
+hybrid -> vector
+local -> vector
+```
+
+`global` 和 `agent` 即使设置 `allow_degraded=true` 也不会降级。降级成功时，响应仍为 `success=true`，但 metadata 会标记：
+
+```json
+{
+  "degraded": true,
+  "degraded_from": "hybrid",
+  "degraded_to": "vector",
+  "degradation_reason": "NEO4J_UNAVAILABLE"
+}
+```

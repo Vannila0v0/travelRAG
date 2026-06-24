@@ -2,6 +2,188 @@
   "version": "task-template-v1",
   "templates": [
     {
+      "name": "direct_url_reading",
+      "description": "用户直接提供 URL 时，读取网页正文并基于页面内容做总结或回答。",
+      "match": {
+        "regex": "https?://"
+      },
+      "execution_mode": "sequential",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "web_fetch",
+          "description": "读取用户提供的网页正文，将页面内容转为可引用文本证据。用户原始问题：{query}",
+          "priority": 1,
+          "depends_on": [],
+          "entities": [],
+          "parameters": {}
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "reflection",
+          "description": "基于网页正文总结并回答用户问题，标出网页证据是否充分。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "weather_aware_itinerary_plan",
+      "description": "用户提出带明确或相对日期的旅游行程规划时，先查询天气，再检索本地路线和景点资料，最后综合生成更适合天气的方案。",
+      "match": {
+        "all": [
+          {
+            "any": ["行程", "路线", "规划", "安排", "游玩", "旅游", "旅行", "一日游", "两日游", "三日游", "多日游"]
+          },
+          {
+            "any": ["桂林", "阳朔", "龙胜", "漓江", "遇龙河", "两江四湖", "象鼻山", "景区"]
+          }
+        ],
+        "regex": "(20\\d{2}[-/.年]\\d{1,2}[-/.月]\\d{1,2}|今天|明天|后天|周末|下周)"
+      },
+      "execution_mode": "sequential",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "weather_query",
+          "description": "查询用户出行日期范围内的天气预报，并给出对户外景点、水上项目、登山观景和室内备选点的影响判断。用户原始问题：{query}",
+          "priority": 1,
+          "depends_on": [],
+          "entities": [],
+          "parameters": {
+            "query": "{query}"
+          }
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "global_search",
+          "description": "基于用户原始问题检索整体行程框架、候选景点组合和典型路线顺序。用户原始问题：{query}",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": [],
+          "parameters": {
+            "query": "{query}"
+          }
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "local_search",
+          "description": "补充检索关键景点的开放时间、门票、交通方式、游玩时长和天气敏感项目限制。用户原始问题：{query}",
+          "priority": 2,
+          "depends_on": ["task_002"],
+          "entities": [],
+          "parameters": {
+            "query": "{query}"
+          }
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "map_route",
+          "description": "结合天气、整体路线框架和本地景点资料，对候选景点进行访问顺序排序，估算路段距离和交通耗时。用户原始问题：{query}",
+          "priority": 3,
+          "depends_on": ["task_002", "task_003"],
+          "entities": [],
+          "parameters": {
+            "query": "{query}"
+          }
+        },
+        {
+          "task_id": "task_005",
+          "task_type": "reflection",
+          "description": "综合天气预报、整体路线、本地景点资料和地图路线排序，调整户外/室内顺序，给出雨天、高温或大风条件下的备选安排。",
+          "priority": 4,
+          "depends_on": ["task_001", "task_002", "task_003", "task_004"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "multi_place_route_order",
+      "description": "用户明确要求多个景点排序、串联或减少绕路时，直接进行路线顺序优化并给出路段耗时证据。",
+      "match": {
+        "all": [
+          {
+            "any": ["顺序", "排序", "先后", "串联", "不绕路", "少绕路", "怎么走", "路线怎么安排", "怎么安排路线"]
+          },
+          {
+            "any": ["象鼻山", "靖江王府", "东西巷", "正阳步行街", "两江四湖", "七星公园", "芦笛岩", "阳朔西街", "遇龙河", "十里画廊", "银子岩", "兴坪古镇"]
+          }
+        ]
+      },
+      "execution_mode": "sequential",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "map_route",
+          "description": "根据用户给出的起点、终点和候选景点，优化多个景点访问顺序，估算路段距离、交通耗时和路线可行性。用户原始问题：{query}",
+          "priority": 1,
+          "depends_on": [],
+          "entities": [],
+          "parameters": {
+            "query": "{query}"
+          }
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "reflection",
+          "description": "基于路线排序结果，说明推荐顺序、可能绕路点、时间风险和需要用户补充确认的信息。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "external_web_evidence",
+      "description": "需要外部网页证据增强时，先搜索候选网页，再读取最相关页面正文，最后综合证据。",
+      "match": {
+        "all": [
+          {
+            "any": ["最新", "现在", "今天", "近期", "公告", "官网", "网页", "链接", "文档", "新闻", "政策", "规则", "版本", "发布", "更新"]
+          },
+          {
+            "any": ["查", "搜索", "核对", "确认", "依据", "来源", "说明", "总结", "解释", "是否", "有没有", "怎么"]
+          }
+        ]
+      },
+      "execution_mode": "sequential",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "web_search",
+          "description": "搜索与用户问题相关的外部网页来源，返回候选 URL sources 列表。",
+          "priority": 1,
+          "depends_on": [],
+          "entities": []
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "source_select",
+          "description": "基于用户问题和候选网页来源，选择最适合读取正文的一条 URL source。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": []
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "web_fetch",
+          "description": "读取 source_select 选中的候选网页来源正文，将页面内容转为可引用文本证据。",
+          "priority": 3,
+          "depends_on": ["task_002"],
+          "entities": []
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "reflection",
+          "description": "基于搜索摘要和网页正文综合证据，检查信息是否充分、是否存在冲突。",
+          "priority": 4,
+          "depends_on": ["task_001", "task_003"],
+          "entities": []
+        }
+      ]
+    },
+    {
       "name": "yangshuo_day_plan",
       "description": "阳朔一日游规划，覆盖遇龙河、西街、交通方式和门票预算。",
       "match": {
@@ -58,6 +240,66 @@
           "task_id": "task_005",
           "task_type": "reflection",
           "description": "综合遇龙河、西街、交通和预算信息，生成时间顺畅、预算清晰的一日游路线。",
+          "priority": 3,
+          "depends_on": ["task_002", "task_003", "task_004"],
+          "entities": []
+        }
+      ]
+    },
+    {
+      "name": "longsheng_hot_spring_day_plan",
+      "description": "龙胜温泉一日游规划，覆盖县城交通、门票优惠、开放时间和游玩重点。",
+      "match": {
+        "all": [
+          {
+            "any": ["龙胜温泉"]
+          },
+          {
+            "any": ["一天", "一日游", "路线", "规划", "行程", "安排"]
+          },
+          {
+            "any": ["交通", "汽车总站", "门票", "票价", "优惠", "游玩重点"]
+          }
+        ]
+      },
+      "execution_mode": "parallel",
+      "nodes": [
+        {
+          "task_id": "task_001",
+          "task_type": "global_search",
+          "description": "获取龙胜温泉一日游整体框架，覆盖龙胜县城汽车总站、温泉景区交通、票务优惠和游玩重点。",
+          "priority": 1,
+          "depends_on": [],
+          "entities": ["龙胜温泉", "龙胜县城汽车总站"]
+        },
+        {
+          "task_id": "task_002",
+          "task_type": "local_search",
+          "description": "查询从龙胜县城汽车总站到龙胜温泉景区大门口的公交或班车交通方式。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["龙胜县城汽车总站", "龙胜温泉"]
+        },
+        {
+          "task_id": "task_003",
+          "task_type": "local_search",
+          "description": "查询龙胜温泉门票优惠政策、开放时间、购票方式和注意事项。",
+          "priority": 1,
+          "depends_on": ["task_001"],
+          "entities": ["龙胜温泉"]
+        },
+        {
+          "task_id": "task_004",
+          "task_type": "local_search",
+          "description": "查询龙胜温泉水质特色、必体验项目、周边半日游和推荐游玩重点。",
+          "priority": 2,
+          "depends_on": ["task_001"],
+          "entities": ["龙胜温泉"]
+        },
+        {
+          "task_id": "task_005",
+          "task_type": "reflection",
+          "description": "综合龙胜温泉交通、门票优惠、开放时间和游玩重点，形成时间顺畅的一日游建议。",
           "priority": 3,
           "depends_on": ["task_002", "task_003", "task_004"],
           "entities": []
@@ -180,10 +422,22 @@
         },
         {
           "task_id": "task_005",
-          "task_type": "reflection",
-          "description": "综合景点、交通、票价和餐饮信息，校验时间衔接、交通便利性和预算合理性，形成最终一日游路线。",
+          "task_type": "map_route",
+          "description": "基于桂林市区核心景点和餐饮候选点，优化一日游访问顺序并估算交通耗时。用户原始问题：{query}",
           "priority": 3,
           "depends_on": ["task_002", "task_003", "task_004"],
+          "entities": ["象鼻山", "靖江王府", "东西巷", "两江四湖", "日月双塔"],
+          "parameters": {
+            "query": "{query}",
+            "places": ["象鼻山", "靖江王府", "东西巷", "两江四湖", "日月双塔"]
+          }
+        },
+        {
+          "task_id": "task_006",
+          "task_type": "reflection",
+          "description": "综合景点、交通、票价、餐饮和地图路线排序，校验时间衔接、交通便利性和预算合理性，形成最终一日游路线。",
+          "priority": 4,
+          "depends_on": ["task_002", "task_003", "task_004", "task_005"],
           "entities": []
         }
       ]

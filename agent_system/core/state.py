@@ -12,12 +12,14 @@ class PlanExecuteState(BaseModel):
 
     session_id: str
     input_query: str
+    plan_mode: str = "auto"
 
     plan: Optional[PlanSpec] = None
 
     execution_records: List[ExecutionRecord] = Field(default_factory=list)
     completed_task_ids: List[str] = Field(default_factory=list)
     sources: List[dict[str, Any]] = Field(default_factory=list)
+    agent_trace: dict[str, Any] = Field(default_factory=dict)
 
     final_report: Optional[str] = None
 

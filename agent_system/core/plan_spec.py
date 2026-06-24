@@ -7,6 +7,11 @@ from pydantic import BaseModel, Field
 TaskTypeLiteral = Literal[
     "local_search",   # 查微观实体
     "global_search",  # 查宏观概况
+    "web_search",     # 查实时外部网页信息
+    "source_select",  # 选择最合适的网页来源
+    "weather_query",  # 查询指定地点和日期范围的天气预报
+    "map_route",      # 多景点路线排序与路段耗时估算
+    "web_fetch",      # 抓取指定 URL 内容
     "reflection",     # 反思
 ]
 

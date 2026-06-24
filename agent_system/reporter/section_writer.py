@@ -11,10 +11,15 @@ _LOGGER = logging.getLogger(__name__)
 class SectionWriter:
     """负责撰写单个章节"""
 
-    def __init__(self):
-        self._llm = get_llm_model()
+    def __init__(self, llm=None):
+        self._llm = llm or get_llm_model()
 
-    def write_section(self, section: SectionOutline, records: List[ExecutionRecord]) -> SectionContent:
+    def write_section(
+        self,
+        section: SectionOutline,
+        records: List[ExecutionRecord],
+        plan_mode: str = "auto",
+    ) -> SectionContent:
         """撰写单章"""
         _LOGGER.info(f"✍️ [Reporter] 正在撰写章节: {section.title}")
 
@@ -26,12 +31,13 @@ class SectionWriter:
         prompt = SECTION_WRITE_PROMPT.format(
             section_title=section.title,
             section_description=section.description,
-            evidence_context=context
+            evidence_context=context,
+            plan_mode_instruction=self._plan_mode_instruction(plan_mode),
         )
 
         # 3. LLM 生成
         response = self._llm.invoke(prompt)
-        content = str(response.content)
+        content = str(response.content if hasattr(response, "content") else response)
 
         return SectionContent(
             section_id=section.section_id,
@@ -48,3 +54,11 @@ class SectionWriter:
             content = str(rec.output)
             text.append(f"[{evidence_id}]: {content}")
         return "\n\n".join(text)
+
+    @staticmethod
+    def _plan_mode_instruction(plan_mode: str) -> str:
+        if plan_mode == "detailed_itinerary":
+            return "本章节服务于详细路线安排，需关注时间顺序、交通、票价、预算和注意事项。"
+        if plan_mode == "place_recommendations":
+            return "本章节服务于景点/项目推荐，需关注候选地点亮点、适合人群、推荐理由和注意事项。"
+        return "根据章节说明自然组织内容。"

@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 from threading import Lock
 
@@ -40,6 +41,34 @@ def check_neo4j() -> bool:
 
 def check_faiss_index(index_dir: Path = DEFAULT_INDEX_DIR) -> bool:
     return (index_dir / "index.faiss").exists() and (index_dir / "index.pkl").exists()
+
+
+def check_llm_config() -> tuple[bool, str | None]:
+    api_key = os.getenv("DEEPSEEK_API_KEY", "").strip()
+    if not api_key or api_key == "your_deepseek_api_key":
+        return False, "DEEPSEEK_API_KEY is missing or still uses the placeholder value"
+
+    base_url = os.getenv("DEEPSEEK_BASE_URL", "").strip()
+    if not base_url:
+        return False, "DEEPSEEK_BASE_URL is missing"
+
+    model = os.getenv("DEEPSEEK_MODEL", "").strip()
+    if not model:
+        return False, "DEEPSEEK_MODEL is missing"
+
+    return True, None
+
+
+def check_embedding_config() -> tuple[bool, str | None]:
+    model_path = os.getenv("EMBEDDING_MODEL_PATH", "").strip()
+    if not model_path:
+        return False, "EMBEDDING_MODEL_PATH is missing"
+
+    device = os.getenv("MODEL_DEVICE", "cpu").strip()
+    if not device:
+        return False, "MODEL_DEVICE is missing"
+
+    return True, None
 
 
 def graph_stats() -> dict[str, int]:

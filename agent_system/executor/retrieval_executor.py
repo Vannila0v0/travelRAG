@@ -30,6 +30,17 @@ class RetrievalExecutor:
         payload["description"] = task.description
         payload["entities"] = getattr(task, "entities", [])
         payload["task_type"] = task.task_type
+        if task.task_type in {"reflection", "source_select", "web_fetch", "map_route"}:
+            payload["previous_records"] = [
+                record.model_dump() if hasattr(record, "model_dump") else record.dict()
+                for record in state.execution_records
+            ]
+        if task.task_type == "source_select":
+            payload["query"] = state.input_query
+        if task.task_type == "web_fetch" and "url" not in payload and "source_index" not in payload:
+            selected_index = self._selected_source_index_from_records(state.execution_records)
+            if selected_index is not None:
+                payload["source_index"] = selected_index
 
         # 3. 执行工具
         start_time = time.perf_counter()
@@ -69,3 +80,18 @@ class RetrievalExecutor:
         )
 
         return record
+
+    @staticmethod
+    def _selected_source_index_from_records(records) -> int | None:
+        for record in reversed(records):
+            if getattr(record, "route", None) != "source_select":
+                continue
+            tool_metadata = getattr(record, "tool_metadata", {}) or {}
+            selected = tool_metadata.get("selected_source_index")
+            try:
+                selected_index = int(selected)
+            except (TypeError, ValueError):
+                continue
+            if selected_index >= 1:
+                return selected_index
+        return None

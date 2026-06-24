@@ -12,8 +12,8 @@ _LOGGER = logging.getLogger(__name__)
 class OutlineBuilder:
     """负责生成报告大纲"""
 
-    def __init__(self):
-        self._llm = get_llm_model()
+    def __init__(self, llm=None):
+        self._llm = llm or get_llm_model()
 
     def build(self, state: PlanExecuteState) -> ReportOutline:
         """根据 State 生成大纲"""
@@ -25,12 +25,13 @@ class OutlineBuilder:
         prompt = OUTLINE_GEN_PROMPT.format(
             query=query,
             background="基于 GraphRAG 的多智能体检索结果",
+            plan_mode_instruction=self._plan_mode_instruction(getattr(state, "plan_mode", "auto")),
             evidence_summary=evidence_summary[:2000]  # 截断防止超长
         )
 
         _LOGGER.info("📝 [Reporter] 正在构思大纲...")
         response = self._llm.invoke(prompt)
-        content = str(response.content)
+        content = str(response.content if hasattr(response, "content") else response)
 
         return self._parse_json(content)
 
@@ -66,3 +67,11 @@ class OutlineBuilder:
                 abstract="无法解析大纲",
                 sections=[]
             )
+
+    @staticmethod
+    def _plan_mode_instruction(plan_mode: str) -> str:
+        if plan_mode == "detailed_itinerary":
+            return "输出应围绕详细路线安排组织，优先形成按天或按上午/下午/晚上推进的章节。"
+        if plan_mode == "place_recommendations":
+            return "输出应围绕景点/项目推荐组织，优先比较候选地点、亮点、适合人群和注意事项，不强行排成完整路线。"
+        return "根据用户问题自然组织报告结构。"

@@ -59,6 +59,10 @@ def source_text(source) -> str:
         source.chunk_id,
         source.source_path,
         source.file_name,
+        getattr(source, "title", None),
+        getattr(source, "url", None),
+        getattr(source, "published_at", None),
+        getattr(source, "source_type", None),
         source.text,
     ]
     return " ".join(str(value) for value in values if value)
@@ -285,7 +289,14 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
             error = None
             result = None
             try:
-                result = engine.ask(sample["question"], route=forced_route)
+                sample_plan_mode = sample.get("plan_mode") or getattr(args, "plan_mode", "auto")
+                result = engine.ask(
+                    sample["question"],
+                    route=forced_route,
+                    report_mode=getattr(args, "report_mode", "concise"),
+                    plan_mode=sample_plan_mode,
+                    response_format=sample.get("response_format") or getattr(args, "response_format", "text"),
+                )
             except Exception as exc:
                 error = str(exc)
             latency = time.perf_counter() - start
@@ -326,6 +337,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
                     for source in sources
                 ],
                 "metadata": result.metadata if result else {},
+                "structured_output": result.structured_output if result else None,
+                "plan_mode": sample.get("plan_mode") or getattr(args, "plan_mode", "auto"),
+                "response_format": sample.get("response_format") or getattr(args, "response_format", "text"),
                 "tags": sample.get("tags", []),
                 "error": error,
             }
@@ -338,6 +352,9 @@ def evaluate(args: argparse.Namespace) -> dict[str, Any]:
         "generated_at": datetime.now().isoformat(timespec="seconds"),
         "dataset": str(dataset_path),
         "route_mode": args.route,
+        "report_mode": getattr(args, "report_mode", "concise"),
+        "plan_mode": getattr(args, "plan_mode", "auto"),
+        "response_format": getattr(args, "response_format", "text"),
         "skip_agent": args.skip_agent,
         "report_name": args.report_name,
         "summary": summarize_results(results),
@@ -368,6 +385,24 @@ def make_parser() -> argparse.ArgumentParser:
         help="Route mode. auto uses router; dataset forces each sample's expected_route.",
     )
     parser.add_argument("--include-source-text", action="store_true", help="Store source text in JSON report")
+    parser.add_argument(
+        "--report-mode",
+        choices=["concise", "full"],
+        default="concise",
+        help="Reporter mode for agent samples.",
+    )
+    parser.add_argument(
+        "--plan-mode",
+        choices=["auto", "detailed_itinerary", "place_recommendations"],
+        default="auto",
+        help="Planning mode for agent travel planning samples.",
+    )
+    parser.add_argument(
+        "--response-format",
+        choices=["text", "itinerary"],
+        default="text",
+        help="Response format for agent planning samples.",
+    )
     parser.add_argument(
         "--allow-hf-network",
         action="store_true",

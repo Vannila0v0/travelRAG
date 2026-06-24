@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
 from server.deps import close_query_engine
-from server.routers import graph, health, query
+from server.routers import dashboard, graph, health, query
 
 
 app = FastAPI(
@@ -13,6 +13,7 @@ app = FastAPI(
 app.include_router(health.router)
 app.include_router(graph.router)
 app.include_router(query.router)
+app.include_router(dashboard.router)
 
 
 @app.on_event("shutdown")

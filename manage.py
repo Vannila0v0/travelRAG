@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -224,12 +225,67 @@ def build_index_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_command(args: argparse.Namespace) -> int:
+    from server.deps import (
+        check_embedding_config,
+        check_faiss_index,
+        check_llm_config,
+        check_neo4j,
+    )
+
+    checks: dict[str, dict[str, str | None]] = {}
+
+    try:
+        check_neo4j()
+        checks["neo4j"] = {"status": "ok", "detail": None}
+    except Exception as exc:
+        checks["neo4j"] = {"status": "failed", "detail": str(exc)}
+
+    checks["faiss_index"] = (
+        {"status": "ok", "detail": None}
+        if check_faiss_index(Path(args.index_dir))
+        else {"status": "failed", "detail": "FAISS index files not found"}
+    )
+
+    llm_ok, llm_detail = check_llm_config()
+    checks["llm_config"] = {
+        "status": "ok" if llm_ok else "failed",
+        "detail": llm_detail,
+    }
+
+    embedding_ok, embedding_detail = check_embedding_config()
+    checks["embedding_config"] = {
+        "status": "ok" if embedding_ok else "failed",
+        "detail": embedding_detail,
+    }
+
+    status_value = "ok" if all(item["status"] == "ok" for item in checks.values()) else "degraded"
+    payload = {"status": status_value, "checks": checks}
+
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print(f"Status: {status_value}")
+        for name, item in checks.items():
+            line = f"- {name}: {item['status']}"
+            if item["detail"]:
+                line += f" ({item['detail']})"
+            print(line)
+
+    return 0 if status_value == "ok" else 1
+
+
 def query_command(args: argparse.Namespace) -> int:
     from query_engine import QueryEngine
 
     engine = QueryEngine(index_dir=args.index_dir)
     try:
-        result = engine.ask(args.question, route=args.route)
+        result = engine.ask(
+            args.question,
+            route=args.route,
+            plan_mode=args.plan_mode,
+            response_format=args.response_format,
+        )
     finally:
         engine.close()
 
@@ -252,12 +308,16 @@ def query_command(args: argparse.Namespace) -> int:
                 for source in result.sources
             ],
             "metadata": result.metadata,
+            "structured_output": result.structured_output,
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         return 0
 
     print(f"Route: {result.route}\n")
     print(result.answer)
+    if result.structured_output:
+        print("\nStructured output:")
+        print(json.dumps(result.structured_output, ensure_ascii=False, indent=2))
     if result.sources:
         print("\nSources:")
         for index, source in enumerate(result.sources[: args.show_sources], start=1):
@@ -267,6 +327,163 @@ def query_command(args: argparse.Namespace) -> int:
             if args.show_source_text and source.text:
                 preview = source.text.replace("\n", " ").strip()
                 print(f"   {preview[:240]}")
+    return 0
+
+
+def _mask_secret(value: str | None) -> str:
+    if not value:
+        return "<missing>"
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _dump_model(value):
+    if hasattr(value, "model_dump"):
+        return value.model_dump()
+    if hasattr(value, "dict"):
+        return value.dict()
+    return value
+
+
+def _web_tool_source_summary(source: dict) -> dict:
+    return {
+        "title": source.get("title") or source.get("file_name"),
+        "url": source.get("url") or source.get("source_path"),
+        "source_type": source.get("source_type"),
+        "score": source.get("score"),
+        "text_preview": str(source.get("text") or "").replace("\n", " ")[:240],
+    }
+
+
+def _smoke_record_summary(record) -> dict:
+    payload = _dump_model(record)
+    metadata = payload.get("metadata") or {}
+    return {
+        "task_id": payload.get("task_id"),
+        "route": payload.get("route"),
+        "task_type": (payload.get("inputs") or {}).get("task_type"),
+        "description": (payload.get("inputs") or {}).get("description"),
+        "error": metadata.get("error"),
+        "latency_seconds": metadata.get("latency_seconds"),
+        "tool_metadata": payload.get("tool_metadata") or {},
+        "source_count": len(payload.get("sources") or []),
+        "sources": [
+            _web_tool_source_summary(source)
+            for source in (payload.get("sources") or [])
+            if isinstance(source, dict)
+        ],
+        "output_preview": str(payload.get("output") or "").replace("\n", " ")[:600],
+    }
+
+
+def smoke_web_tools_command(args: argparse.Namespace) -> int:
+    try:
+        from dotenv import load_dotenv
+
+        load_dotenv(PROJECT_ROOT / ".env")
+    except Exception:
+        pass
+
+    provider = os.getenv("WEB_SEARCH_PROVIDER", "").strip()
+    api_key = os.getenv("WEB_SEARCH_API_KEY", "").strip() or os.getenv("EXA_API_KEY", "").strip()
+    config_summary = {
+        "WEB_SEARCH_PROVIDER": provider or "<missing>",
+        "WEB_SEARCH_API_KEY": _mask_secret(api_key),
+        "WEB_SEARCH_EXA_MCP_ENDPOINT": os.getenv("WEB_SEARCH_EXA_MCP_ENDPOINT", ""),
+        "WEB_SEARCH_EXA_TOOL_NAME": os.getenv("WEB_SEARCH_EXA_TOOL_NAME", "web_search_exa"),
+        "WEB_SEARCH_MAX_RESULTS": os.getenv("WEB_SEARCH_MAX_RESULTS", "5"),
+        "WEB_FETCH_MAX_BYTES": os.getenv("WEB_FETCH_MAX_BYTES", "1048576"),
+        "WEB_FETCH_MAX_CHARS": os.getenv("WEB_FETCH_MAX_CHARS", "12000"),
+    }
+
+    if args.require_exa and provider.lower() not in {"exa", "exa_mcp"}:
+        print("WEB_SEARCH_PROVIDER is not exa_mcp/exa. Use WEB_SEARCH_PROVIDER=exa_mcp or remove --require-exa.")
+        print(json.dumps(config_summary, ensure_ascii=False, indent=2))
+        return 2
+    os.environ.setdefault("AGENT_MAX_WORKERS", "1")
+
+    from agent_system.orchestrator import MultiAgentOrchestrator
+
+    state = MultiAgentOrchestrator().run(
+        args.query,
+        report_mode=args.report_mode,
+        plan_mode=args.plan_mode,
+    )
+
+    tasks = []
+    if state.plan and state.plan.task_graph:
+        tasks = [_dump_model(node) for node in state.plan.task_graph.nodes]
+    records = [_smoke_record_summary(record) for record in state.execution_records]
+    payload = {
+        "query": args.query,
+        "config": config_summary,
+        "task_graph": {
+            "execution_mode": state.plan.task_graph.execution_mode if state.plan else None,
+            "nodes": tasks,
+        },
+        "execution_records": records,
+        "agent_trace": state.agent_trace,
+        "sources": [
+            _web_tool_source_summary(source)
+            for source in state.sources
+            if isinstance(source, dict)
+        ],
+        "final_answer": state.final_report,
+    }
+
+    has_error = any(record.get("error") for record in records)
+    if args.json:
+        print(json.dumps(payload, ensure_ascii=False, indent=2))
+    else:
+        print("=== Web Tools Smoke ===")
+        print(f"Query: {args.query}")
+        print("\nConfig:")
+        for name, value in config_summary.items():
+            print(f"- {name}: {value}")
+
+        print("\nTask Graph:")
+        for index, task in enumerate(tasks, start=1):
+            params = task.get("parameters") or {}
+            suffix = f" params={json.dumps(params, ensure_ascii=False)}" if params else ""
+            print(f"{index}. {task.get('task_id')} [{task.get('task_type')}] {task.get('description')}{suffix}")
+
+        print("\nExecution Records:")
+        for index, record in enumerate(records, start=1):
+            status = "ERROR" if record.get("error") else "OK"
+            latency = record.get("latency_seconds")
+            latency_text = f"{latency:.3f}s" if isinstance(latency, (int, float)) else "n/a"
+            print(f"{index}. [{status}] {record.get('task_id')} route={record.get('route')} latency={latency_text}")
+            if record.get("error"):
+                print(f"   error: {record.get('error')}")
+            if record.get("tool_metadata"):
+                print(f"   metadata: {json.dumps(record['tool_metadata'], ensure_ascii=False)}")
+            for source_index, source in enumerate(record.get("sources") or [], start=1):
+                print(f"   source {source_index}: {source.get('title')} {source.get('url')}")
+                if source.get("text_preview"):
+                    print(f"      {source.get('text_preview')}")
+            if args.show_outputs and record.get("output_preview"):
+                print(f"   output: {record.get('output_preview')}")
+
+        print("\nFinal Answer:")
+        print(state.final_report or "<empty>")
+
+    return 1 if has_error else 0
+
+
+def eval_command(args: argparse.Namespace) -> int:
+    from evaluation.run_eval import evaluate
+
+    payload = evaluate(args)
+    summary = payload["summary"]
+    print("\n=== Evaluation Summary ===")
+    print(f"evaluated_samples: {summary['evaluated_samples']}")
+    print(f"route_accuracy: {summary['route_accuracy']:.2%}")
+    print(f"avg_answer_keyword_recall: {summary['avg_answer_keyword_recall']:.2%}")
+    print(f"avg_source_recall: {summary['avg_source_recall']:.2%}")
+    print(f"has_source_rate: {summary['has_source_rate']:.2%}")
+    print(f"avg_latency_seconds: {summary['avg_latency_seconds']:.2f}")
+    print(f"reports: {Path(args.report_dir).resolve()}")
     return 0
 
 
@@ -317,6 +534,14 @@ def make_parser() -> argparse.ArgumentParser:
     build_index.add_argument("--dry-run", action="store_true", help="Only list matched files")
     build_index.set_defaults(func=build_index_command)
 
+    check = subparsers.add_parser(
+        "check",
+        help="Check local runtime dependencies without loading heavy models",
+    )
+    check.add_argument("--index-dir", default=str(DEFAULT_INDEX_DIR), help="FAISS index directory")
+    check.add_argument("--json", action="store_true", help="Print structured JSON status")
+    check.set_defaults(func=check_command)
+
     query = subparsers.add_parser(
         "query",
         help="Ask a question through the unified Query Engine",
@@ -330,9 +555,102 @@ def make_parser() -> argparse.ArgumentParser:
         help="Force a retrieval route, or use auto routing",
     )
     query.add_argument("--json", action="store_true", help="Print structured JSON result")
+    query.add_argument(
+        "--plan-mode",
+        choices=["auto", "detailed_itinerary", "place_recommendations"],
+        default="auto",
+        help="Planning mode for agent travel planning queries",
+    )
+    query.add_argument(
+        "--response-format",
+        choices=["text", "itinerary"],
+        default="text",
+        help="Return text only or include structured itinerary output for detailed agent planning",
+    )
     query.add_argument("--show-sources", type=int, default=5, help="Number of sources to print")
     query.add_argument("--show-source-text", action="store_true", help="Print source text previews")
     query.set_defaults(func=query_command)
+
+    smoke_web_tools = subparsers.add_parser(
+        "smoke-web-tools",
+        help="Run a manual end-to-end smoke check for web_search/web_fetch agent tools",
+    )
+    smoke_web_tools.add_argument(
+        "--query",
+        default="桂林两江四湖今天是否开放？请查最新信息",
+        help="Question to run through the agent web tools chain",
+    )
+    smoke_web_tools.add_argument(
+        "--report-mode",
+        choices=["concise", "full"],
+        default="concise",
+        help="Reporter mode for the smoke run",
+    )
+    smoke_web_tools.add_argument(
+        "--plan-mode",
+        choices=["auto", "detailed_itinerary", "place_recommendations"],
+        default="auto",
+        help="Planning mode for the smoke run",
+    )
+    smoke_web_tools.add_argument(
+        "--require-exa",
+        action="store_true",
+        help="Fail before running unless WEB_SEARCH_PROVIDER is exa_mcp/exa",
+    )
+    smoke_web_tools.add_argument("--json", action="store_true", help="Print structured JSON output")
+    smoke_web_tools.add_argument("--show-outputs", action="store_true", help="Print execution output previews")
+    smoke_web_tools.set_defaults(func=smoke_web_tools_command)
+
+    eval_parser = subparsers.add_parser(
+        "eval",
+        help="Run the tourism QA evaluation benchmark",
+    )
+    eval_parser.add_argument(
+        "--dataset",
+        default=str(PROJECT_ROOT / "evaluation" / "datasets" / "tourism_qa.jsonl"),
+        help="JSONL evaluation dataset",
+    )
+    eval_parser.add_argument(
+        "--report-dir",
+        default=str(PROJECT_ROOT / "evaluation" / "reports"),
+        help="Report output directory",
+    )
+    eval_parser.add_argument("--report-name", help="Optional named report file, without extension")
+    eval_parser.add_argument("--index-dir", default=str(DEFAULT_INDEX_DIR), help="FAISS index directory")
+    eval_parser.add_argument("--limit", type=int, help="Evaluate at most N samples")
+    eval_parser.add_argument("--ids", help="Comma-separated sample IDs to evaluate")
+    eval_parser.add_argument("--skip-agent", action="store_true", help="Skip samples whose expected route is agent")
+    eval_parser.add_argument(
+        "--route",
+        choices=["auto", "dataset", "vector", "local", "global", "hybrid", "agent"],
+        default="auto",
+        help="Route mode. auto uses router; dataset forces each sample's expected_route.",
+    )
+    eval_parser.add_argument("--include-source-text", action="store_true", help="Store source text in JSON report")
+    eval_parser.add_argument(
+        "--report-mode",
+        choices=["concise", "full"],
+        default="concise",
+        help="Reporter mode for agent samples.",
+    )
+    eval_parser.add_argument(
+        "--plan-mode",
+        choices=["auto", "detailed_itinerary", "place_recommendations"],
+        default="auto",
+        help="Planning mode for agent travel planning samples.",
+    )
+    eval_parser.add_argument(
+        "--response-format",
+        choices=["text", "itinerary"],
+        default="text",
+        help="Response format for agent planning samples.",
+    )
+    eval_parser.add_argument(
+        "--allow-hf-network",
+        action="store_true",
+        help="Allow HuggingFace network checks/downloads during evaluation.",
+    )
+    eval_parser.set_defaults(func=eval_command)
 
     serve = subparsers.add_parser(
         "serve",

@@ -56,6 +56,7 @@ class GraphGlobalQueryEngine:
     def retrieve_communities(self, query: str, limit: int = 8):
         tokens = self._tokens(query)
         is_night_query = "夜游" in query or "夜间" in query or "晚上" in query
+        mentions_qianguqing = "桂林千古情" in query or "千古情" in query
         is_city_route_query = (
             ("一日游" in query or "路线" in query or "行程" in query or "怎么玩" in query)
             and ("桂林" in query or "市区" in query)
@@ -105,6 +106,25 @@ class GraphGlobalQueryEngine:
                 WITH c,
                      score
                      + CASE
+                         WHEN $mentions_qianguqing
+                              AND coalesce(c.title, "") CONTAINS "桂林千古情"
+                         THEN 24 ELSE 0 END
+                     + CASE
+                         WHEN $mentions_qianguqing
+                              AND coalesce(c.title, "") CONTAINS "剧场票务"
+                         THEN 16 ELSE 0 END
+                     + CASE
+                         WHEN $mentions_qianguqing
+                              AND coalesce(c.title, "") CONTAINS "设施体系"
+                         THEN 8 ELSE 0 END
+                     - CASE
+                         WHEN $mentions_qianguqing
+                              AND coalesce(c.title, "") CONTAINS "阳朔"
+                              AND NOT coalesce(c.title, "") CONTAINS "桂林千古情"
+                         THEN 8 ELSE 0 END AS score
+                WITH c,
+                     score
+                     + CASE
                          WHEN $is_city_route_query
                               AND (
                                   coalesce(c.title, "") CONTAINS "桂林市区"
@@ -140,6 +160,7 @@ class GraphGlobalQueryEngine:
                 query_text=query,
                 tokens=tokens,
                 is_night_query=is_night_query,
+                mentions_qianguqing=mentions_qianguqing,
                 is_city_route_query=is_city_route_query,
                 limit=limit,
             )

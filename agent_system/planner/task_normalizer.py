@@ -1,20 +1,33 @@
 from __future__ import annotations
 
 from ..core.plan_spec import TaskGraph, TaskNode
+from .plan_compactor import PlanCompactor
 from .task_template_matcher import TaskTemplateMatcher
 
 
 class TaskNormalizer:
     """Normalize LLM-generated task graphs into stable executable DAGs."""
 
-    def __init__(self, template_matcher: TaskTemplateMatcher | None = None):
+    def __init__(
+        self,
+        template_matcher: TaskTemplateMatcher | None = None,
+        compactor: PlanCompactor | None = None,
+        max_tasks: int = 5,
+    ):
         self._template_matcher = template_matcher or TaskTemplateMatcher()
+        self._compactor = compactor or PlanCompactor(max_tasks=max_tasks)
+        self.last_compaction_trace: dict = {}
 
     def normalize(self, query: str, task_graph: TaskGraph) -> TaskGraph:
         template_graph = self._template_matcher.match(query)
         if template_graph:
-            return template_graph
-        return self._normalize_generic(task_graph)
+            return self._compact(template_graph)
+        return self._compact(self._normalize_generic(task_graph))
+
+    def _compact(self, task_graph: TaskGraph) -> TaskGraph:
+        compacted = self._compactor.compact(task_graph)
+        self.last_compaction_trace = dict(self._compactor.last_trace)
+        return compacted
 
     def _normalize_generic(self, task_graph: TaskGraph) -> TaskGraph:
         normalized_nodes: list[TaskNode] = []
